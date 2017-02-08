@@ -20,19 +20,22 @@ api_pre = "http://music.163.com/weapi/%s"
 api_url = "song/enhance/player/url"
 api_detail = "song/detail"
 api_album = api_pre%"album/"
+api_playlist = api_pre%"playlist/"
 
 web_pre = 'http://music.163.com/%s'
 web_song = web_pre%'#/song?id='
 
 
+
 web_album = web_pre%"#/album?id="
-#songs_playlist = 
+web_playlist = web_pre%"/#/playlist?id="
 
 
 outchain_pre = "http://music.163.com/outchain/player?%s"
 outchain = outchain_pre%"type=2&id="
 outchain_auto = outchain_pre%"type=2&auto=1&id="
 outchain_album = outchain_pre%"type=1&id="
+outchain_playlist = outchain_pre%"type=0&id="
 
 
 
@@ -219,23 +222,34 @@ get_info_methods = {
 }
 
 
-def get_album(album_id):
+def get_album(album_id, isPlaylist=False):
 	ex = None
-	session.open(outchain_album+str(album_id),wait=False)
-	ex = wait_for_rsc(session, lambda url:url.find(api_album)>=0)
+	baseurl = outchain_album
+	baseapi = api_album
+	if isPlaylist:
+		baseurl = outchain_playlist
+		baseapi = api_playlist
+
+
+	session.open(baseurl+str(album_id),wait=False)
+	ex = wait_for_rsc(session, lambda url:url.find(baseapi)>=0)
 	check_ex(ex, album_id)
 	
 	songs = []
 	for item in ex:
 		print item.url
-		if item.url.find(api_album)>=0:
+		if item.url.find(baseapi)>=0:
 			print item.headers
 			songs.append(item)
 
 	#songs = pick_rsc(ex, lambda url,content:url.find(api_album)>=0)
 	if len(songs)>0:
 		songs = json.loads(str(songs[0].content))
-		songs = songs['album']['songs']
+		if isPlaylist:
+			print songs['result']['id']
+			songs = songs['result']['tracks']
+		else:
+			songs = songs['album']['songs']	
 	else:
 		raise Exception('No song list fetched!')	
 
@@ -275,7 +289,22 @@ def test_cdn(song_id, logfile,prefix='download'):
 
 
 
-def test_web(song_id,logfile,prefix='download'):
+def download_web(song_id,logfile,prefix='download'):
+
+	if isinstance(song_id, list):
+		print 'download list: ', song_id
+		for id in song_id:
+			time1 = time.time()
+			try:
+				download_web(id,logfile,prefix)
+				print 'succeed'
+				
+			except Exception,e:
+				print e
+				print 'fail'
+			time2 = time.time()
+			print 'time ellapse: ', time2 - time1
+		return			
 	
 
 	url, detail = get_info_from_websong(song_id) #get_info_from_outchain(song_id)
@@ -298,25 +327,7 @@ def test_web(song_id,logfile,prefix='download'):
 	except Exception,e:
 		print e
 		logfile.writelines('failure\n')
-
-
-def test_album(album_id,logfile,prefix='download'):
 	
-	songs = get_album(album_id)
-	song_list = [song['id'] for song in songs]
-	print song_list
-
-	for id in song_list:
-		time1 = time.time()
-		try:
-			test_web(id,logfile,prefix)
-			print 'succeed'
-			
-		except Exception,e:
-			print e
-			print 'fail'
-		time2 = time.time()
-		print 'time ellapse: ', time2 - time1
 
 
 def apply_proxy(host, port):
@@ -337,7 +348,7 @@ def apply_proxy(host, port):
 if __name__ == "__main__":
 	import 	argparse
 	parser = argparse.ArgumentParser()
-	parser.add_argument('type',type=str,help="download music by song_id or album_id",choices=['album','song'])
+	parser.add_argument('type',type=str,help="download music by song_id or album_id or playlist_id",choices=['album','playlist','song'])
 	parser.add_argument('id',type=int,help="song_id or album_id")
 	parser.add_argument('--outchain',action='store_true')
 	parser.add_argument('-p','--prefix',type=str,help="path to save music",default='download')
@@ -346,6 +357,7 @@ if __name__ == "__main__":
 
 
 	album_id = 3367211
+	playlist_id = 31682057
 	song_id = 35804599 # 451113440 #
 
 	logfile = codecs.open(args.log, 'wb', 'utf-8')
@@ -357,12 +369,22 @@ if __name__ == "__main__":
 	try:
 		#print get_info_from_outchain(451113440).url
 		#print get_info_from_outchain(35804599).url
-		if args.type == 'album':
-			test_album(args.id, logfile, args.prefix)
-		elif args.type == 'song':
-			test_web(args.id, logfile, args.prefix)	
+		if args.type == 'song':
+			download_web(args.id, logfile, args.prefix)	
 		else:
-			test_cdn(args.id, logfile, args.prefix)	
+			# batch download
+			songs = []
+			if args.type == 'album':
+				songs = get_album(args.id)
+			elif args.type == 'playlist':
+				songs = get_album(args.id,isPlaylist=True)
+			if len(songs)==0:
+				test_cdn(args.id, logfile, args.prefix)
+				# pass
+			else:
+				
+				song_list = [song['id'] for song in songs]
+				download_web(song_list,logfile,args.prefix)
 		#pass
 	except Exception,e:
 		print e
