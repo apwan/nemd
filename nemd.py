@@ -100,10 +100,11 @@ def wait_for_rsc(s, cri, cri_extra=lambda url:True, timeout=5):
 		if len(s.http_resources)==0:
 			continue
 		ex += s._release_last_resources()
-		print 'wait len', len(ex)
+		#print 'wait len', len(ex)
 		if check_loaded(ex, cri) and check_loaded(ex, cri_extra):
 			#print 'loaded'
-			return ex				
+			return ex
+	print 'timeout'						
 	return ex			
 
 
@@ -257,6 +258,12 @@ def get_album(album_id, isPlaylist=False):
 
 
 
+def get_list(filename):
+	f = codecs.open(filename, 'rb', 'utf-8')
+	songs = map(lambda x:int(x.strip()), f.read().split(','))
+	return songs
+
+
 
 def test_cdn(song_id, logfile,prefix='download'):
 	
@@ -313,6 +320,7 @@ def download_web(song_id,logfile,prefix='download'):
 		#TODO: add somgthing
 		pass
 	filename = "%s-%s.mp3"%(artist, detail.name)
+	filename = filename.replace('/', '-')
 	url = url['url']
 
 
@@ -346,19 +354,22 @@ def apply_proxy(host, port):
 # step 1: obtain url
 
 if __name__ == "__main__":
-	import 	argparse
-	parser = argparse.ArgumentParser()
-	parser.add_argument('type',type=str,help="download music by song_id or album_id or playlist_id",choices=['album','playlist','song'])
-	parser.add_argument('id',type=int,help="song_id or album_id")
-	parser.add_argument('--outchain',action='store_true')
-	parser.add_argument('-p','--prefix',type=str,help="path to save music",default='download')
-	parser.add_argument('-l','--log',type=str,help="log filename",default='nemd.log')
-	args = parser.parse_args()
-
-
 	album_id = 3367211
 	playlist_id = 31682057
 	song_id = 35804599 # 451113440 #
+
+	import 	argparse
+	parser = argparse.ArgumentParser()
+	parser.add_argument('type',type=str,help="download music by song_id or album_id or playlist_id",choices=['album','playlist','song'])
+	parser.add_argument('-i','--id',type=int,help="song_id or album_id", default=song_id)
+	parser.add_argument('--outchain',action='store_true')
+	parser.add_argument('-p','--prefix',type=str,help="path to save music",default='download')
+	parser.add_argument('-l','--log',type=str,help="log filename",default='nemd.log')
+	parser.add_argument('-f', '--file', type=str, help="songlist filename", default='')
+	args = parser.parse_args()
+
+
+	
 
 	logfile = codecs.open(args.log, 'wb', 'utf-8')
 
@@ -370,7 +381,11 @@ if __name__ == "__main__":
 		#print get_info_from_outchain(451113440).url
 		#print get_info_from_outchain(35804599).url
 		if args.type == 'song':
-			download_web(args.id, logfile, args.prefix)	
+			if len(args.file)>0:
+				song_list = get_list(args.file)
+				download_web(song_list, logfile, args.prefix)
+			else:		
+				download_web(args.id, logfile, args.prefix)	
 		else:
 			# batch download
 			songs = []
