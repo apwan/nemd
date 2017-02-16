@@ -320,7 +320,7 @@ def download_web(song_id,logfile,prefix='download'):
 		#TODO: add somgthing
 		pass
 	filename = "%s-%s.mp3"%(artist, detail.name)
-	filename = filename.replace('/', '-')
+	filename = filename.replace('/', '-').replace('\\', '')
 	url = url['url']
 
 
